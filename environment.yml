@@ -1,4 +1,4 @@
-name: od-rai-lgbm
+name: od_rai_lgbm
 channels:
   - conda-forge
   - defaults
