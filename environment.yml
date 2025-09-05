@@ -1,0 +1,29 @@
+name: od-rai-lgbm
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - lightgbm
+  - imbalanced-learn
+  - matplotlib
+  - seaborn
+  - ipywidgets
+  - jupyterlab
+  - notebook
+  - ipykernel
+  - joblib
+  - threadpoolctl
+  - statsmodels
+  - pip:
+      - responsibleai
+      - raiwidgets
+      - interpret-community
+      - erroranalysis
+      - dice-ml
+      - econml
