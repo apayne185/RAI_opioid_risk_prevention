@@ -3,12 +3,36 @@
 Utility functions for simple model evaluation
 
 Functions
-- positive_scores: get continuous scores for positive class 1
-- auc_report: print ROC AUC, PR AUC, prevalence, lift, and plot ROC and PR curves
-- tradeoff_table: compute precision, recall, FP, FN, alerts per 1000 across thresholds
-- pick_threshold_cost: cost-based rule with theoretical and empirical cost minima
-- pick_threshold_recall_floor: maximize precision subject to a recall floor
-- pick_threshold_workload: maximize true positives under an alerts-per-1000 budget
+----------
+- positive_scores(estimator, X): 
+    Returns continuous scores for the positive class (class 1) from an estimator. Supports both `predict_proba` and `decision_function`.
+
+- auc_report(y_true, y_score, name="model", plot=True): 
+    Prints and returns ROC AUC, PR AUC, prevalence, and lift. Optionally plots ROC and PR curves.
+
+- tradeoff_table(y_true, y_score, thresholds=None): 
+    Computes a DataFrame of precision, recall, TP, FP, TN, FN, alerts per 1000, and true positives per 1000 for a range of thresholds.
+
+- pick_threshold_cost(y_true, y_score, C_FP, C_FN, thresholds=None): 
+    Selects thresholds to minimize expected cost, using both theoretical (Bayes formula) and empirical minima. Returns summary and table.
+
+- pick_threshold_recall_floor(y_true, y_score, recall_floor, thresholds=None): 
+    Finds the threshold that maximizes precision subject to a minimum recall constraint. Returns summary and table.
+
+- pick_threshold_workload(y_true, y_score, alerts_per_1000_max, thresholds=None): 
+    Finds the threshold that maximizes true positives per 1000 under an alerts-per-1000 budget. Returns summary and table.
+
+- summary_at_threshold(y_true, y_score, threshold): 
+    Returns a DataFrame with precision, recall, TP, FP, TN, FN, alerts per 1000, and true positives per 1000 at a specific threshold.
+
+- plot_recall_floor_curves(y_true, y_score, recall_floor, chosen_threshold): 
+    Plots precision and recall versus threshold, with lines for recall floor and chosen threshold, and labels at the chosen threshold.
+
+- plot_cumulative_recall_at_threshold(y_true, y_score, chosen_threshold): 
+    Plots cumulative recall versus number of alerts, with a vertical line and label at the number of alerts implied by the chosen threshold.
+
+- plot_topk_at_threshold(y_true, y_score, chosen_threshold, top_k=30): 
+    Plots a bar chart of the top-k highest risk cases, coloring true positives and false positives, with a line for the chosen threshold.
 """
 from typing import Dict, Optional
 import numpy as np
@@ -31,9 +55,17 @@ __all__ = [
     "pick_threshold_cost",
     "pick_threshold_recall_floor",
     "pick_threshold_workload",
+    "summary_at_threshold",
+    "plot_recall_floor_curves",
+    "plot_cumulative_recall_at_threshold",
+    "plot_topk_at_threshold",
 ]
 
+
 def positive_scores(estimator, X) -> np.ndarray:
+    """
+    Return continuous scores for the positive class (class 1) from an estimator.
+    """
     if hasattr(estimator, "predict_proba"):
         proba = estimator.predict_proba(X)
         proba = np.asarray(proba)
@@ -50,9 +82,14 @@ def positive_scores(estimator, X) -> np.ndarray:
             pos_idx = classes.index(1) if 1 in classes else 1
             return df[:, pos_idx].ravel()
         return df.ravel()
-    raise AttributeError("Estimator must implement predict_proba or decision_function")
+    raise AttributeError(
+        "Estimator must implement predict_proba or decision_function")
+
 
 def auc_report(y_true, y_score, name: str = "model", plot: bool = True) -> Dict[str, float]:
+    """
+    Print and return ROC AUC, PR AUC, prevalence, and lift. Optionally plot ROC and PR curves.
+    """
     y_true = np.asarray(y_true).ravel()
     y_score = np.asarray(y_score).ravel()
 
@@ -64,7 +101,8 @@ def auc_report(y_true, y_score, name: str = "model", plot: bool = True) -> Dict[
     print(f"{name}")
     print(f"PR AUC: {pr_auc:.3f}")
     print(f"ROC AUC: {roc:.3f}")
-    print(f"Prevalence p = {prevalence:.3f}  |  PR AUC lift = {lift:.2f}× over baseline")
+    print(
+        f"Prevalence p = {prevalence:.3f}  |  PR AUC lift = {lift:.2f}× over baseline")
 
     if plot:
         RocCurveDisplay.from_predictions(y_true, y_score)
@@ -81,7 +119,11 @@ def auc_report(y_true, y_score, name: str = "model", plot: bool = True) -> Dict[
 
     return {"name": name, "roc_auc": roc, "pr_auc": pr_auc, "prevalence": prevalence, "lift": lift}
 
+
 def tradeoff_table(y_true, y_score, thresholds: Optional[np.ndarray] = None) -> pd.DataFrame:
+    """
+    Compute precision, recall, confusion matrix, and alert rates for a range of thresholds.
+    """
     y_true = np.asarray(y_true).ravel().astype(int)
     y_score = np.asarray(y_score).ravel()
 
@@ -95,7 +137,7 @@ def tradeoff_table(y_true, y_score, thresholds: Optional[np.ndarray] = None) -> 
         y_hat = (y_score >= t).astype(int)
         tn, fp, fn, tp = confusion_matrix(y_true, y_hat, labels=[0, 1]).ravel()
         prec = precision_score(y_true, y_hat, zero_division=0)
-        rec  = recall_score(y_true, y_hat, zero_division=0)
+        rec = recall_score(y_true, y_hat, zero_division=0)
         alerts_per_1000 = 1000.0 * float(np.mean(y_hat))
         true_pos_per_1000 = 1000.0 * float(tp) / n
         rows.append({
@@ -111,12 +153,17 @@ def tradeoff_table(y_true, y_score, thresholds: Optional[np.ndarray] = None) -> 
         })
     return pd.DataFrame(rows)
 
+
 def pick_threshold_cost(y_true, y_score, C_FP: float, C_FN: float, thresholds: Optional[np.ndarray] = None) -> Dict[str, object]:
+    """
+    Select thresholds to minimize expected cost using both theoretical and empirical minima.
+    """
     tbl = tradeoff_table(y_true, y_score, thresholds)
     denom = C_FP + C_FN
     t_formula = float(C_FP / denom) if denom > 0 else 1.0
 
-    idx_near = int(np.argmin(np.abs(tbl["threshold"].values - t_formula)))
+    threshold_values = np.asarray(tbl["threshold"].values, dtype=float)
+    idx_near = int(np.argmin(np.abs(threshold_values - t_formula)))
     row_formula = tbl.iloc[idx_near].copy()
 
     exp_cost = C_FP * tbl["FP"] + C_FN * tbl["FN"]
@@ -124,8 +171,10 @@ def pick_threshold_cost(y_true, y_score, C_FP: float, C_FN: float, thresholds: O
     row_emp = tbl.iloc[idx_emp].copy()
 
     summary = pd.DataFrame([
-        {"rule": "Bayes formula", **row_formula.to_dict(), "expected_cost": float(exp_cost.iloc[idx_near])},
-        {"rule": "Empirical min cost", **row_emp.to_dict(), "expected_cost": float(exp_cost.iloc[idx_emp])},
+        {"rule": "Bayes formula", **row_formula.to_dict(),
+         "expected_cost": float(exp_cost.iloc[idx_near])},
+        {"rule": "Empirical min cost", **
+            row_emp.to_dict(), "expected_cost": float(exp_cost.iloc[idx_emp])},
     ])
 
     return {
@@ -135,11 +184,15 @@ def pick_threshold_cost(y_true, y_score, C_FP: float, C_FN: float, thresholds: O
         "table": tbl,
     }
 
+
 def pick_threshold_recall_floor(y_true, y_score, recall_floor: float, thresholds: Optional[np.ndarray] = None) -> Dict[str, object]:
+    """
+    Find threshold maximizing precision subject to a minimum recall constraint.
+    """
     tbl = tradeoff_table(y_true, y_score, thresholds)
     feasible = tbl[tbl["recall"] >= recall_floor]
     if len(feasible) == 0:
-        idx = int(tbl["recall"].values.argmax())
+        idx = int(np.argmax(tbl["recall"].to_numpy()))
         chosen = tbl.iloc[idx]
         rule = "Max recall fallback"
     else:
@@ -155,11 +208,16 @@ def pick_threshold_recall_floor(y_true, y_score, recall_floor: float, thresholds
         "table": tbl,
     }
 
+
 def pick_threshold_workload(y_true, y_score, alerts_per_1000_max: float, thresholds: Optional[np.ndarray] = None) -> Dict[str, object]:
+    """
+    Find threshold maximizing true positives per 1000 under an alerts-per-1000 budget.
+    """
     tbl = tradeoff_table(y_true, y_score, thresholds)
     feasible = tbl[tbl["alerts_per_1000"] <= alerts_per_1000_max + 1e-9]
     if len(feasible) == 0:
-        idx = int((tbl["alerts_per_1000"] - alerts_per_1000_max).abs().values.argmin())
+        idx = int((tbl["alerts_per_1000"] -
+                  alerts_per_1000_max).abs().values.argmin())
         chosen = tbl.iloc[idx]
         rule = "Closest to alerts budget fallback"
     else:
@@ -180,14 +238,14 @@ def pick_threshold_workload(y_true, y_score, alerts_per_1000_max: float, thresho
 
 def summary_at_threshold(y_true, y_score, threshold):
     """
-    One row with precision, recall, FP, FN, TP, TN, alerts per 1000, true_pos per 1000 at a given threshold
+    Return precision, recall, confusion matrix, and alert rates at a specific threshold.
     """
     y_true = np.asarray(y_true).astype(int).ravel()
     y_score = np.asarray(y_score).ravel()
     y_hat = (y_score >= float(threshold)).astype(int)
     tn, fp, fn, tp = confusion_matrix(y_true, y_hat, labels=[0, 1]).ravel()
     prec = precision_score(y_true, y_hat, zero_division=0)
-    rec  = recall_score(y_true, y_hat, zero_division=0)
+    rec = recall_score(y_true, y_hat, zero_division=0)
     n = len(y_true)
     row = pd.DataFrame([{
         "threshold": float(threshold),
@@ -202,27 +260,31 @@ def summary_at_threshold(y_true, y_score, threshold):
     }])
     return row
 
+
 def plot_recall_floor_curves(y_true, y_score, recall_floor, chosen_threshold):
     """
-    Precision and recall vs threshold with
-    - horizontal line at recall floor
-    - vertical line at chosen threshold
-    - point labels at the chosen threshold
+    Plot precision and recall vs threshold, with lines for recall floor and chosen threshold.
     """
-    from . import tradeoff_table  # if util.py is a module; else remove the dot
+    # Use local function defined in this module (no package-relative import)
     tbl = tradeoff_table(y_true, y_score)
     chosen = summary_at_threshold(y_true, y_score, chosen_threshold).iloc[0]
 
     plt.figure()
     plt.plot(tbl["threshold"], tbl["recall"], label="Recall")
     plt.plot(tbl["threshold"], tbl["precision"], label="Precision")
-    plt.axhline(float(recall_floor), linestyle="--", color="red", label=f"Recall floor = {float(recall_floor):.2f}")
-    plt.axvline(float(chosen_threshold), linestyle=":", color="black", label=f"Chosen threshold = {float(chosen_threshold):.2f}")
+    plt.axhline(float(recall_floor), linestyle="--", color="red",
+                label=f"Recall floor = {float(recall_floor):.2f}")
+    plt.axvline(float(chosen_threshold), linestyle=":", color="black",
+                label=f"Chosen threshold = {float(chosen_threshold):.2f}")
 
-    plt.scatter(float(chosen_threshold), chosen["recall"], color="blue", zorder=5)
-    plt.text(float(chosen_threshold) + 0.01, chosen["recall"], f"Recall={chosen['recall']:.2f}", va="center")
-    plt.scatter(float(chosen_threshold), chosen["precision"], color="orange", zorder=5)
-    plt.text(float(chosen_threshold) + 0.01, chosen["precision"], f"Prec={chosen['precision']:.2f}", va="center")
+    plt.scatter(float(chosen_threshold),
+                chosen["recall"], color="blue", zorder=5)
+    plt.text(float(chosen_threshold) + 0.01,
+             chosen["recall"], f"Recall={chosen['recall']:.2f}", va="center")
+    plt.scatter(float(chosen_threshold),
+                chosen["precision"], color="red", zorder=5)
+    plt.text(float(chosen_threshold) + 0.01,
+             chosen["precision"], f"Prec={chosen['precision']:.2f}", va="center")
 
     plt.xlabel("Threshold")
     plt.ylabel("Score")
@@ -231,10 +293,10 @@ def plot_recall_floor_curves(y_true, y_score, recall_floor, chosen_threshold):
     plt.xlim(0, 0.55)
     plt.show()
 
+
 def plot_cumulative_recall_at_threshold(y_true, y_score, chosen_threshold):
     """
-    Cumulative recall vs number of alerts with vertical line at the number of alerts
-    implied by the chosen threshold and a dot labeling recall at that point
+    Plot cumulative recall vs number of alerts, with a vertical line at the chosen threshold.
     """
     y_true = np.asarray(y_true).astype(int).ravel()
     y_score = np.asarray(y_score).ravel()
@@ -245,29 +307,32 @@ def plot_cumulative_recall_at_threshold(y_true, y_score, chosen_threshold):
     cum_tp = np.cumsum(y_sorted)
     total_pos = int(cum_tp[-1]) if cum_tp.size else 0
     alerts = np.arange(1, len(y_sorted) + 1)
-    recall_curve = cum_tp / total_pos if total_pos > 0 else np.zeros_like(cum_tp, dtype=float)
+    recall_curve = cum_tp / \
+        total_pos if total_pos > 0 else np.zeros_like(cum_tp, dtype=float)
 
     # alerts implied by threshold
     y_hat = (y_score >= float(chosen_threshold)).astype(int)
     n_alerts = int(y_hat.sum())
-    rec_at_thr = float(recall_curve[n_alerts - 1]) if 0 < n_alerts <= len(y_sorted) else 0.0
+    rec_at_thr = float(recall_curve[n_alerts - 1]
+                       ) if 0 < n_alerts <= len(y_sorted) else 0.0
 
     plt.figure()
     plt.plot(alerts, recall_curve, label="Cumulative recall")
-    plt.axvline(n_alerts, linestyle="--", color="red", label=f"Alerts = {n_alerts}")
+    plt.axvline(n_alerts, linestyle="--", color="red",
+                label=f"Alerts = {n_alerts}")
     plt.scatter(n_alerts, rec_at_thr, color="black", zorder=5)
-    plt.text(n_alerts + max(2, len(y_sorted)//100), rec_at_thr, f"Recall = {rec_at_thr:.2f}", va="center")
+    plt.text(n_alerts + max(2, len(y_sorted)//100), rec_at_thr,
+             f"Recall = {rec_at_thr:.2f}", va="center")
     plt.xlabel("Number of alerts")
     plt.ylabel("Recall")
     plt.title("Cumulative capture of true cases vs alerts")
     plt.legend()
     plt.show()
 
+
 def plot_topk_at_threshold(y_true, y_score, chosen_threshold, top_k=30):
     """
-    Bar chart of the top-k highest risk patients
-    Orange bars are true positives, gray bars are false positives
-    Horizontal dashed line marks the chosen threshold
+    Plot a bar chart of the top-k highest risk cases, coloring true and false positives.
     """
     y_true = np.asarray(y_true).astype(int).ravel()
     y_score = np.asarray(y_score).ravel()
@@ -281,9 +346,12 @@ def plot_topk_at_threshold(y_true, y_score, chosen_threshold, top_k=30):
     fp_idx = np.where(top_true == 0)[0]
 
     plt.figure(figsize=(10, 4))
-    plt.bar(tp_idx, top_scores[tp_idx], label="True addicted TP", color="tab:orange")
-    plt.bar(fp_idx, top_scores[fp_idx], label="Not addicted FP", color="tab:gray")
-    plt.axhline(float(chosen_threshold), linestyle="--", color="black", label=f"Threshold = {float(chosen_threshold):.2f}")
+    plt.bar(tp_idx, top_scores[tp_idx],
+            label="True addicted TP", color="tab:red")
+    plt.bar(fp_idx, top_scores[fp_idx],
+            label="Not addicted FP", color="tab:gray")
+    plt.axhline(float(chosen_threshold), linestyle="--", color="black",
+                label=f"Threshold = {float(chosen_threshold):.2f}")
     plt.xlabel("Patients ranked by predicted risk")
     plt.ylabel("Predicted risk")
     plt.title(f"Top {int(top_k)} highest-risk patients on validation")
