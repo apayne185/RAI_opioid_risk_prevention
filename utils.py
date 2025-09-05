@@ -282,7 +282,7 @@ def plot_recall_floor_curves(y_true, y_score, recall_floor, chosen_threshold):
     plt.text(float(chosen_threshold) + 0.01,
              chosen["recall"], f"Recall={chosen['recall']:.2f}", va="center")
     plt.scatter(float(chosen_threshold),
-                chosen["precision"], color="red", zorder=5)
+                chosen["precision"], color="orange", zorder=5)
     plt.text(float(chosen_threshold) + 0.01,
              chosen["precision"], f"Prec={chosen['precision']:.2f}", va="center")
 
