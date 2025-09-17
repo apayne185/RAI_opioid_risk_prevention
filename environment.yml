@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11
+  - python
   - pip
   - numpy
   - pandas
@@ -20,12 +20,13 @@ dependencies:
   - joblib
   - threadpoolctl
   - statsmodels
-  - pip:
-      - responsibleai
-      - raiwidgets
-      - interpret-community
-      - erroranalysis
-      - fairlearn
-      - dice-ml
-      - econml
-      - raiutils
+  - erroranalysis
+  - interpret-community
+  - fairlearn
+  - econml
+  - dice-ml
+  - raiutils
+  - responsibleai
+  - raiwidgets
+  - interpret-community
+  - erroranalysis
