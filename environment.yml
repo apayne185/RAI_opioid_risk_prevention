@@ -25,5 +25,6 @@ dependencies:
       - raiwidgets
       - interpret-community
       - erroranalysis
+      - fairlearn
       - dice-ml
       - econml
