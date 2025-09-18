@@ -3,31 +3,27 @@ channels:
   - conda-forge
 channel_priority: strict
 dependencies:
-  - python
+  - python=3.10
+  - pip
   - numpy
   - pandas
   - scipy
   - scikit-learn
-  - lightgbm
   - imbalanced-learn
   - matplotlib
   - seaborn
   - ipywidgets
-  - widgetsnbextension   # ensures widgets render in Notebook/Lab
   - jupyterlab
   - notebook
   - ipykernel
   - joblib
   - threadpoolctl
   - statsmodels
-  # RAI stack from conda-forge
-  - fairlearn
-  - dice-ml
-  - raiutils
-  - responsibleai
-  - interpret-community
-  - erroranalysis
-  - econml
-  - pip
   - pip:
+      - responsibleai
       - raiwidgets
+      - interpret-community
+      - erroranalysis
+      - dice-ml
+      - econml
+      - raiutils
