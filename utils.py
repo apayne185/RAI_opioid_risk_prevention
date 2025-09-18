@@ -360,40 +360,38 @@ def plot_topk_at_threshold(y_true, y_score, chosen_threshold, top_k=30):
     plt.tight_layout()
     plt.show()
 
-# --- add below existing code in utils.py ---
+class ThresholdedEstimator:
+    """
+    Wrap a probabilistic classifier so .predict uses a custom threshold on P(y=1)
+    Top-level class so pickle can serialize it for RAIInsights.save(...)
+    """
+    def __init__(self, base, threshold: float = 0.5):
+        self.base = base
+        self.threshold = float(threshold)
+
+    def predict_proba(self, X):
+        return self.base.predict_proba(X)
+
+    def predict(self, X):
+        proba = self.predict_proba(X)
+        proba = np.asarray(proba)
+        if proba.ndim == 2 and proba.shape[1] >= 2:
+            return (proba[:, 1] >= self.threshold).astype(int)
+        return (proba.ravel() >= self.threshold).astype(int)
+
+    def fit(self, X, y=None):
+        return self
+
+    def get_params(self, deep=True):
+        return {"base": self.base, "threshold": self.threshold}
+
+    def set_params(self, **params):
+        for k, v in params.items():
+            setattr(self, k, v)
+        return self
+
+    def __getattr__(self, name):
+        return getattr(self.base, name)
+
 def make_thresholded_estimator(base_estimator, threshold: float = 0.5):
-    """
-    Wrap a probabilistic classifier so .predict uses the given threshold on P(y=1).
-    .predict_proba is delegated to the base estimator unchanged.
-    """
-    class _ThresholdedEstimator:
-        def __init__(self, base, thr):
-            self.base = base
-            self.threshold = float(thr)
-
-        def predict_proba(self, X):
-            return self.base.predict_proba(X)
-
-        def predict(self, X):
-            proba = self.predict_proba(X)
-            proba = np.asarray(proba)
-            if proba.ndim == 2 and proba.shape[1] >= 2:
-                return (proba[:, 1] >= self.threshold).astype(int)
-            return (proba.ravel() >= self.threshold).astype(int)
-
-        # sklearn compatibility
-        def fit(self, X, y=None):
-            return self
-
-        def get_params(self, deep=True):
-            return {"base": self.base, "threshold": self.threshold}
-
-        def set_params(self, **params):
-            for k, v in params.items():
-                setattr(self, k, v)
-            return self
-
-        def __getattr__(self, name):
-            return getattr(self.base, name)
-
-    return _ThresholdedEstimator(base_estimator, threshold)
+    return ThresholdedEstimator(base_estimator, threshold)
