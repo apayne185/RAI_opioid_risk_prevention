@@ -1,10 +1,9 @@
-name: od_rai_lgbm
+name: od_rai_mamba
 channels:
   - conda-forge
-  - defaults
+channel_priority: strict
 dependencies:
   - python
-  - pip
   - numpy
   - pandas
   - scipy
@@ -14,19 +13,21 @@ dependencies:
   - matplotlib
   - seaborn
   - ipywidgets
+  - widgetsnbextension   # ensures widgets render in Notebook/Lab
   - jupyterlab
   - notebook
   - ipykernel
   - joblib
   - threadpoolctl
   - statsmodels
-  - erroranalysis
-  - interpret-community
+  # RAI stack from conda-forge
   - fairlearn
-  - econml
   - dice-ml
   - raiutils
   - responsibleai
-  - raiwidgets
   - interpret-community
   - erroranalysis
+  - econml
+  - pip
+  - pip:
+      - raiwidgets
