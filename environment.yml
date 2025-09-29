@@ -27,3 +27,6 @@ dependencies:
       - dice-ml
       - econml
       - raiutils
+      - kaggle 
+      - opendatasets 
+      

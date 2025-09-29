@@ -1,0 +1,12 @@
+conda env create -f environment.yml
+conda activate od_rai_lgbm
+conda list
+
+python -m ipykernel install --user --name=od_rai_lgbm --display-name "Python (od_rai_lgbm)"
+
+
+conda deactivate
+
+conda remove --name od_rai_lgbm  --all    #if we want to remove 
+
+
