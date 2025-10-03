@@ -7,6 +7,7 @@ python -m ipykernel install --user --name=od_rai_lgbm --display-name "Python (od
 
 conda deactivate
 
-conda remove --name od_rai_lgbm  --all    #if we want to remove 
+ 
+#if we want to remove 
 
 

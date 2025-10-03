@@ -29,4 +29,5 @@ dependencies:
       - raiutils
       - kaggle 
       - opendatasets 
-      
+      - yellowbrick
+
