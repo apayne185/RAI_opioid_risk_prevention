@@ -30,4 +30,6 @@ dependencies:
       - kaggle 
       - opendatasets 
       - yellowbrick
+      - xgboost
+      - lightgbm
 
